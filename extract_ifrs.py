@@ -311,6 +311,91 @@ def _rows_similar(a: list[str], b: list[str]) -> bool:
     return matches / max(len(a), len(b)) > 0.6
 
 
+# ──────────────────────── Исправление разрывов строк ─────────────────────
+
+def fix_line_breaks_in_table(rows: list[list[str]]) -> list[list[str]]:
+    """
+    Исправляет разрывы строк внутри ячеек таблиц.
+    
+    Правила:
+    1. Если строка начинается со строчной буквы (в первой непустой ячейке),
+       она считается продолжением предыдущей строки.
+    2. Текст из первой ячейки строки-продолжения добавляется к последней
+       непустой ячейке предыдущей строки.
+    3. Остальные ячейки строки-продолжения (данные) переносятся в 
+       соответствующие колонки предыдущей строки, если там пусто.
+    4. Строка-продолжение удаляется из результата.
+    
+    Пример:
+      Было:
+        ["Процентные доходы, рассчитанные по методу эффективной", "", "", ""]
+        ["ставки", "463,3", "269,0", "-20,9%", "24,0%"]
+      Стало:
+        ["Процентные доходы, рассчитанные по методу эффективной ставки", "463,3", "269,0", "-20,9%", "24,0%"]
+    """
+    if not rows:
+        return []
+    
+    result: list[list[str]] = []
+    
+    for row in rows:
+        if not row:
+            continue
+        
+        # Проверяем, является ли текущая строка продолжением предыдущей
+        is_continuation = False
+        if result:
+            first_non_empty = ""
+            for cell in row:
+                stripped = cell.strip()
+                if stripped:
+                    first_non_empty = stripped
+                    break
+            
+            # Если первая непустая ячейка начинается со строчной буквы
+            if first_non_empty and first_non_empty[0].islower():
+                is_continuation = True
+        
+        if is_continuation and result:
+            # Склейка с предыдущей строкой
+            prev_row = result[-1]
+            
+            # Расширяем предыдущую строку до размера текущей, если нужно
+            while len(prev_row) < len(row):
+                prev_row.append("")
+            
+            # Находим последнюю непустую ячейку в предыдущей строке
+            # и добавляем к ней текст из первой ячейки текущей строки
+            last_non_empty_idx = -1
+            for i in range(len(prev_row) - 1, -1, -1):
+                if prev_row[i].strip():
+                    last_non_empty_idx = i
+                    break
+            
+            if last_non_empty_idx >= 0:
+                # Добавляем текст продолжения к последней ячейке
+                continuation_text = row[0].strip() if row else ""
+                if continuation_text:
+                    prev_row[last_non_empty_idx] = prev_row[last_non_empty_idx].rstrip() + " " + continuation_text
+            elif row and row[0].strip():
+                # Если в предыдущей строке всё пусто, просто добавляем текст
+                if len(prev_row) > 0:
+                    prev_row[0] = row[0].strip()
+            
+            # Переносим данные из остальных ячеек строки-продолжения
+            for i in range(1, len(row)):
+                if i < len(prev_row) and row[i].strip():
+                    # Если в предыдущей строке ячейка пуста, заполняем её
+                    if not prev_row[i].strip():
+                        prev_row[i] = row[i].strip()
+                    # Иначе оставляем как есть (предполагаем, что данные уже там)
+        else:
+            # Новая строка — добавляем как есть
+            result.append(list(row))
+    
+    return result
+
+
 # ──────────────────────────── Запись CSV ────────────────────────────────
 
 def write_csv(rows: list[list[str]], path: str) -> None:
@@ -393,6 +478,7 @@ def run(pdf_path: str, output_dir: str) -> None:
             continue
 
         merged = merge_table_pages(tables)
+        merged = fix_line_breaks_in_table(merged)
         csv_path = os.path.join(output_dir, f"{form_key}.csv")
         write_csv(merged, csv_path)
         print(f"  [+] {name_ru} -> {csv_path}  ({len(merged)} строк, {len(tables)} частей)")
