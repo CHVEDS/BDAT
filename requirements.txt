@@ -1,0 +1,22 @@
+# ── Основные зависимости ──────────────────────────────────────────────
+
+# PDF-парсер (MinerU)
+# Установка: pip install mineru[pipeline]
+# Требует дополнительной настройки моделей — см. документацию MinerU:
+# https://github.com/opendatalab/MinerU
+mineru[pipeline]
+
+# Веб-интерфейс
+streamlit>=1.35.0
+
+# Работа с данными
+pandas>=2.0.0
+
+# Генерация Excel
+openpyxl>=3.1.0
+
+# ── Транзитивные зависимости (устанавливаются автоматически) ──────────
+# numpy          — требуется pandas
+# Pillow         — требуется MinerU
+# torch          — требуется MinerU pipeline backend
+# transformers   — требуется MinerU для OCR-режима
